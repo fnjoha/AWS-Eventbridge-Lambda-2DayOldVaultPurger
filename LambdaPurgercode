@@ -1,0 +1,39 @@
+import boto3
+from datetime import datetime, timedelta, timezone
+
+def lambda_handler(event, context):
+    # Initialize AWS Backup client
+    backup_client = boto3.client('backup')
+
+    # Specify the name of your backup vault
+    backup_vault_name = 'Source-Vault-name'
+
+    # Calculate the cutoff time (2 days ago) in UTC
+    cutoff_time = datetime.now(timezone.utc) - timedelta(days=2)
+
+    # List recovery points
+    response = backup_client.list_recovery_points_by_backup_vault(
+        BackupVaultName=backup_vault_name
+    )
+
+    # Iterate over recovery points and delete those older than 2 days
+    for recovery_point in response['RecoveryPoints']:
+        # Extract creation time from the recovery point
+        creation_time = recovery_point['CreationDate']
+
+        # Ensure that both datetime objects are offset-naive
+        if creation_time.replace(tzinfo=None) < cutoff_time.replace(tzinfo=None):
+            recovery_point_arn = recovery_point['RecoveryPointArn']
+            print(f"Deleting recovery point: {recovery_point_arn}")
+
+            # Delete recovery point
+            backup_client.delete_recovery_point(
+                BackupVaultName=backup_vault_name,
+                RecoveryPointArn=recovery_point_arn
+            )
+
+    # Return a response indicating success
+    return {
+        'statusCode': 200,
+        'body': 'Recovery points older than 2 days deleted successfully.'
+    }
